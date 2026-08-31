@@ -289,7 +289,14 @@ public class BlockBuilder<T extends Block, P> extends AbstractBuilder<Block, T, 
      * @return this {@link BlockBuilder}
      */
     public BlockBuilder<T, P> defaultLoot() {
-        return loot(RegistrateBlockLootTables::dropSelf);
+        // A block with no item of its own would drop air, which a loot table may not
+        // name; it still needs a table, since the block points at one either way
+        return loot((tables, block) -> {
+            if (block.asItem() == net.minecraft.world.item.Items.AIR)
+                tables.add(block, net.minecraft.world.level.storage.loot.LootTable.lootTable());
+            else
+                tables.dropSelf(block);
+        });
     }
 
     /**
