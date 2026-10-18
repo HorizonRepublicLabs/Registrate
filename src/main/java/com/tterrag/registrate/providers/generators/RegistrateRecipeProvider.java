@@ -10,7 +10,11 @@ import net.minecraft.advancements.triggers.Criterion;
 import net.minecraft.advancements.triggers.EnterBlockTrigger;
 import net.minecraft.advancements.triggers.InventoryChangeTrigger;
 import net.minecraft.core.Holder;
-import net.minecraft.core.HolderLookup;
+import net.minecraft.core.HolderGetter;
+import net.minecraft.core.Registry;
+import net.minecraft.advancements.Advancement;
+import net.minecraft.data.worldgen.BootstrapContext;
+import com.tterrag.registrate.AbstractRegistrate;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.BlockFamily;
@@ -37,53 +41,54 @@ import java.util.function.Supplier;
 
 public class RegistrateRecipeProvider extends RecipeProvider implements RecipeOutput {
 
-    private final RegistrateRecipeRunner runner;
+    private final AbstractRegistrate<?> owner;
 
-    @Delegate
+    @Delegate(excludes = Excludes.class)
     private final RecipeOutput outputDelegated;
 
-    private final HolderLookup<Item> itemLookup;
-    private final HolderLookup<Block> blockLookup;
-    private final HolderLookup<EntityType<?>> entityLookup;
+    private final HolderGetter<Block> blockLookup;
+    private final HolderGetter<EntityType<?>> entityLookup;
 
-    public RegistrateRecipeProvider(RegistrateRecipeRunner runner, HolderLookup.Provider registries, RecipeOutput output) {
-        super(registries, output);
-        this.runner = runner;
-        this.outputDelegated = output;
-        itemLookup = registries.lookupOrThrow(Registries.ITEM);
-        blockLookup = registries.lookupOrThrow(Registries.BLOCK);
-        entityLookup = registries.lookupOrThrow(Registries.ENTITY_TYPE);
+    private interface Excludes {
+        <S> HolderGetter<S> lookup(ResourceKey<? extends Registry<? extends S>> key);
+    }
+
+    public RegistrateRecipeProvider(AbstractRegistrate<?> owner, BootstrapContext<Recipe<?>> recipes, BootstrapContext<Advancement> advancements) {
+        super(recipes, advancements);
+        this.owner = owner;
+        this.outputDelegated = this.output;
+        blockLookup = lookup(Registries.BLOCK);
+        entityLookup = lookup(Registries.ENTITY_TYPE);
     }
 
     @Override
     public void buildRecipes() {
-        runner.provider = this;
-        runner.owner.genData(ProviderType.RECIPE, this);
-        runner.provider = null;
+        owner.genData(ProviderType.RECIPE, this);
     }
 
-    public HolderLookup.Provider registries() {
-        return registries;
+    @Override
+    public <S> HolderGetter<S> lookup(ResourceKey<? extends Registry<? extends S>> key) {
+        return output.lookup(key);
     }
 
-    public HolderLookup<Item> itemLookup() {
-        return itemLookup;
+    public HolderGetter<Item> itemLookup() {
+        return items;
     }
 
-    public HolderLookup<Block> blockLookup() {
+    public HolderGetter<Block> blockLookup() {
         return blockLookup;
     }
 
-    public HolderLookup<EntityType<?>> entityLookup() {
+    public HolderGetter<EntityType<?>> entityLookup() {
         return entityLookup;
     }
 
     public <T> Holder<T> resolve(ResourceKey<T> key) {
-        return registries.lookupOrThrow(key.registryKey()).getOrThrow(key);
+        return output.lookup(key.registryKey()).getOrThrow(key);
     }
 
     public Identifier safeId(Identifier id) {
-        return Identifier.fromNamespaceAndPath(runner.owner.getModid(), safeName(id));
+        return Identifier.fromNamespaceAndPath(owner.getModid(), safeName(id));
     }
 
     public Identifier safeId(DataIngredient source) {
@@ -95,7 +100,7 @@ public class RegistrateRecipeProvider extends RecipeProvider implements RecipeOu
     }
 
     public ResourceKey<Recipe<?>> safeKey(Identifier id) {
-        return ResourceKey.create(Registries.RECIPE, Identifier.fromNamespaceAndPath(runner.owner.getModid(), safeName(id)));
+        return ResourceKey.create(Registries.RECIPE, Identifier.fromNamespaceAndPath(owner.getModid(), safeName(id)));
     }
 
     public ResourceKey<Recipe<?>> safeKey(DataIngredient source) {

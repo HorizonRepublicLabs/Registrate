@@ -43,6 +43,10 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
+import net.neoforged.neoforge.data.event.GatherDataRegistryEntriesEvent;
+import com.tterrag.registrate.providers.RegistrateAdvancementProvider;
+import com.tterrag.registrate.providers.generators.RegistrateRecipeProvider;
+import com.tterrag.registrate.providers.loot.RegistrateLootTableProvider;
 import net.neoforged.neoforge.data.loading.DatagenModLoader;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.fluids.BaseFlowingFluid;
@@ -203,6 +207,7 @@ public abstract class AbstractRegistrate<S extends AbstractRegistrate<S>> {
         });
 
         if (doDatagen.get()) {
+            OneTimeEventReceiver.addModListener(this, GatherDataRegistryEntriesEvent.class, this::onDataRegistries);
             OneTimeEventReceiver.addModListener(this, GatherDataEvent.Client.class, this::onData);
         }
 
@@ -276,6 +281,20 @@ public abstract class AbstractRegistrate<S extends AbstractRegistrate<S>> {
     }
 
     private @Nullable RegistrateDataProvider provider;
+
+    /**
+     * Called when datagen gathers datapack registry entries, to bootstrap recipes, loot tables, advancements and any
+     * entries added through {@link #getDataGenInitializer()}. Can be overriden in custom implementations.
+     *
+     * @param event
+     *            The event
+     */
+    protected void onDataRegistries(GatherDataRegistryEntriesEvent event) {
+        getDataGenInitializer().gatherDatapackEntries(event);
+        event.recipe((recipes, advancements) -> new RegistrateRecipeProvider(this, recipes, advancements));
+        event.add(Registries.LOOT_TABLE, new RegistrateLootTableProvider(this));
+        event.add(Registries.ADVANCEMENT, context -> genData(ProviderType.ADVANCEMENT, new RegistrateAdvancementProvider(this, context)));
+    }
 
     /**
      * Called when datagen begins to add our provider to the generator. Can be overriden in custom implementations.
@@ -563,8 +582,9 @@ public abstract class AbstractRegistrate<S extends AbstractRegistrate<S>> {
         return initializer;
     }
 
-    private final NonNullSupplier<List<Pair<String, String>>> extraLang = NonNullSupplier.lazy(() -> {
-        final List<Pair<String, String>> ret = new ArrayList<>();
+    // A set, since datapack registry bootstraps (e.g. advancements) may run more than once and re-add the same entries
+    private final NonNullSupplier<Set<Pair<String, String>>> extraLang = NonNullSupplier.lazy(() -> {
+        final Set<Pair<String, String>> ret = new LinkedHashSet<>();
         addDataGenerator(ProviderType.LANG, prov -> ret.forEach(p -> prov.add(p.getKey(), p.getValue())));
         return ret;
     });
@@ -916,7 +936,7 @@ public abstract class AbstractRegistrate<S extends AbstractRegistrate<S>> {
      */
     public <R> ResourceKey<Registry<R>> makeDatapackRegistry(String name, Codec<R> codec, @Nullable Codec<R> networkCodec) {
         final ResourceKey<Registry<R>> registryId = ResourceKey.createRegistryKey(Identifier.fromNamespaceAndPath(getModid(), name));
-        OneTimeEventReceiver.addModListener(this, DataPackRegistryEvent.NewRegistry.class, event -> event.dataPackRegistry(registryId, codec, networkCodec));
+        OneTimeEventReceiver.addModListener(this, NewDatapackRegistryEvent.class, event -> event.worldRegistry(registryId, codec, networkCodec));
         return registryId;
     }
 

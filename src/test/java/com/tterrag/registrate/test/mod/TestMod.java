@@ -32,7 +32,6 @@ import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.Registry;
-import net.minecraft.core.RegistrySetBuilder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.recipes.RecipeCategory;
 import net.minecraft.data.worldgen.biome.OverworldBiomes;
@@ -88,8 +87,8 @@ import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.level.storage.loot.entries.LootItem;
 import net.minecraft.world.level.storage.loot.functions.EnchantedCountIncreaseFunction;
 import net.minecraft.world.level.storage.loot.functions.SetItemCountFunction;
-import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
-import net.minecraft.world.level.storage.loot.providers.number.UniformGenerator;
+import net.minecraft.world.level.storage.loot.providers.number.floats.ContextFloatProviders;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProviders;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
@@ -97,7 +96,6 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.common.data.DatapackBuiltinEntriesProvider;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import net.neoforged.neoforge.fluids.BaseFlowingFluid;
@@ -107,7 +105,7 @@ import net.neoforged.testframework.conf.ClientConfiguration;
 import net.neoforged.testframework.conf.Feature;
 import net.neoforged.testframework.conf.FrameworkConfiguration;
 import net.neoforged.testframework.impl.MutableTestFramework;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -295,10 +293,10 @@ public class TestMod {
             .defaultSpawnEgg()
             .loot((prov, type) -> prov.add(type, LootTable.lootTable()
                     .withPool(LootPool.lootPool()
-                            .setRolls(ConstantValue.exactly(1))
+                            .setRolls(ContextIntProviders.exactly(1))
                             .add(LootItem.lootTableItem(Items.DIAMOND)
-                                    .apply(SetItemCountFunction.setCount(UniformGenerator.between(1, 3)))
-                                    .apply(EnchantedCountIncreaseFunction.lootingMultiplier(prov.getRegistries(), UniformGenerator.between(0, 2)))))))
+                                    .apply(SetItemCountFunction.setCount(ContextIntProviders.between(1, 3)))
+                                    .apply(EnchantedCountIncreaseFunction.lootingMultiplier(prov.lookup(Registries.ENCHANTMENT), ContextFloatProviders.between(0, 2)))))))
             .tag(EntityTypeTags.RAIDERS)
             .register();
 
@@ -403,22 +401,17 @@ public class TestMod {
         registrate.addLang("item", testitem.getId(), "testextra", "Magic!");
         registrate.addDataGenerator(ProviderType.ADVANCEMENT, adv -> Advancement.Builder.advancement()
             .addCriterion("has_egg", InventoryChangeTrigger.TriggerInstance.hasItems(Items.EGG))
-            .display(Items.EGG,
+            .rootDisplay(Items.EGG,
                     adv.title(registrate.getModid(), "root", "Test Advancement"), adv.desc(registrate.getModid(), "root", "Get an egg."),
                     Identifier.withDefaultNamespace("textures/gui/advancements/backgrounds/stone.png"), AdvancementType.TASK, true, true, false)
             .save(adv, registrate.getModid() + ":root"));
-        registrate.addDataGenerator(ProviderType.GENERIC_SERVER, provider -> provider.add(data -> {
-            // generic server side provider to generate custom dimension
-            // to teleport to this dimension use the following command
-            // /execute as @s in testmod:test_dimension run tp @s 0 64 0
-            // you can validate you are in this dimension by checking the debug screen
-            // right underneath the `Chunks[C]` and `Chunk[S]` should be the dimension name
-            var testDimensionTypeKey = ResourceKey.create(Registries.DIMENSION_TYPE, Identifier.fromNamespaceAndPath("testmod", "test_dimension_type"));
-
-            return new DatapackBuiltinEntriesProvider(
-                    data.output(),
-                    data.registries(),
-                    new RegistrySetBuilder()
+        // custom dimension, generated through the datapack registry gatherer
+        // to teleport to this dimension use the following command
+        // /execute as @s in testmod:test_dimension run tp @s 0 64 0
+        // you can validate you are in this dimension by checking the debug screen
+        // right underneath the `Chunks[C]` and `Chunk[S]` should be the dimension name
+        var testDimensionTypeKey = ResourceKey.create(Registries.DIMENSION_TYPE, Identifier.fromNamespaceAndPath("testmod", "test_dimension_type"));
+        registrate.getDataGenInitializer()
                             // custom dimension type, just a simple overworld-like dimension
                             .add(Registries.DIMENSION_TYPE, context -> {
                                 HolderGetter<Block> blocks = context.lookup(Registries.BLOCK);
@@ -443,10 +436,10 @@ public class TestMod {
                                                 DimensionType.Skybox.OVERWORLD,
                                                 CardinalLighting.Type.DEFAULT,
                                                 EnvironmentAttributeMap.builder()
-                                                        .set(EnvironmentAttributes.FOG_COLOR, 0xffc0d8ff)
-                                                        .set(EnvironmentAttributes.SKY_COLOR, OverworldBiomes.calculateSkyColor(0.8F))
-                                                        .set(EnvironmentAttributes.AMBIENT_LIGHT_COLOR, 0xff0a0a0a)
-                                                        .set(EnvironmentAttributes.CLOUD_COLOR, ARGB.white(0.8F))
+                                                        .set(EnvironmentAttributes.FOG_COLOR, ARGB.vector3fFromRGB24(0xffc0d8ff))
+                                                        .set(EnvironmentAttributes.SKY_COLOR, ARGB.vector3fFromRGB24(OverworldBiomes.calculateSkyColor(0.8F)))
+                                                        .set(EnvironmentAttributes.AMBIENT_LIGHT_COLOR, ARGB.vector3fFromRGB24(0xff0a0a0a))
+                                                        .set(EnvironmentAttributes.CLOUD_COLOR, ARGB.vector4fFromARGB32(ARGB.white(0.8F)))
                                                         .set(EnvironmentAttributes.CLOUD_HEIGHT, 192.33f)
                                                         .set(EnvironmentAttributes.BACKGROUND_MUSIC, BackgroundMusic.OVERWORLD)
                                                         .set(EnvironmentAttributes.BED_RULE, BedRule.CAN_SLEEP_WHEN_DARK)
@@ -476,10 +469,7 @@ public class TestMod {
                                                 )
                                         )
                                 );
-                            }),
-                    Set.of("testmod")
-            );
-        }));
+                            });
 
         eventBus.addListener(this::onCommonSetup);
 
@@ -487,8 +477,8 @@ public class TestMod {
         final MutableTestFramework framework = FrameworkConfiguration
                 .builder(Identifier.fromNamespaceAndPath(MOD_ID, "tests"))
                 .clientConfiguration(() -> ClientConfiguration.builder()
-                        .toggleOverlayKey(GLFW.GLFW_KEY_O)
-                        .openManagerKey(GLFW.GLFW_KEY_M)
+                        .toggleOverlayKey(InputConstants.KEY_O)
+                        .openManagerKey(InputConstants.KEY_M)
                         .build())
                 .enable(Feature.CLIENT_SYNC, Feature.TEST_STORE)
                 .build()

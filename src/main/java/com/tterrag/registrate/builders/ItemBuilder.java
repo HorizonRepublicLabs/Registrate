@@ -27,9 +27,12 @@ import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.datamaps.builtin.Compostable;
-import net.neoforged.neoforge.registries.datamaps.builtin.FurnaceFuel;
-import net.neoforged.neoforge.registries.datamaps.builtin.NeoForgeDataMaps;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CookingFuel;
+import net.minecraft.world.level.storage.loot.providers.number.floats.ContextFloatProviders;
+import net.minecraft.world.level.storage.loot.providers.number.floats.ResolvableFloat;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt;
 
 import org.jspecify.annotations.Nullable;
 import java.util.Map;
@@ -231,15 +234,23 @@ public class ItemBuilder<T extends Item, P> extends AbstractBuilder<Item, T, P, 
      * @param tick time in ticks for this item to burn in furnace.
      */
     public ItemBuilder<T, P> burnTime(int tick) {
-        return dataMap(NeoForgeDataMaps.FURNACE_FUELS, new FurnaceFuel(tick));
+        return properties(p -> p.component(DataComponents.COOKING_FUEL, new CookingFuel(new ResolvableInt.Constant(tick), ResolvableFloat.fromKey(ContextFloatProviders.COOKING_DEFAULT_SPEED_MULTIPLIER))));
     }
 
     /**
-     * Add compost chance for the item
-     * @param chance chance for composter to increase one level when composting this item.
+     * Add a data-driven burn time for the item
+     * @param burnTime the context int provider giving the burn time in ticks
      */
-    public ItemBuilder<T, P> compostable(float chance) {
-        return dataMap(NeoForgeDataMaps.COMPOSTABLES, new Compostable(chance));
+    public ItemBuilder<T, P> burnTime(ResourceKey<ContextIntProvider> burnTime) {
+        return properties(p -> p.cookingFuel(burnTime));
+    }
+
+    /**
+     * Make the item compostable
+     * @param layers the context int provider giving the layers added, e.g. {@link net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProviders#COMPOSTABLE_MEDIUM}
+     */
+    public ItemBuilder<T, P> compostable(ResourceKey<ContextIntProvider> layers) {
+        return properties(p -> p.compostable(layers));
     }
 
     private @Nullable Function<T, NonNullSupplier<Supplier<IClientItemExtensions>>> clientExtensionFunc;

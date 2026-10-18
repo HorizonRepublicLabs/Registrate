@@ -1,16 +1,19 @@
 package com.tterrag.registrate.providers;
 
 import net.minecraft.core.Registry;
-import net.minecraft.core.RegistrySetBuilder;
+import net.minecraft.core.registries.MultiRegistryBootstrap;
+import net.minecraft.core.registries.SingleRegistryBootstrap;
+import net.neoforged.neoforge.data.event.DatapackRegistryGatherer;
 import net.minecraft.resources.ResourceKey;
 
 import org.jspecify.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 public class DataProviderInitializer {
 
-	private final RegistrySetBuilder datapackEntryProvider = new RegistrySetBuilder();
+	private final List<Consumer<DatapackRegistryGatherer>> datapackEntryProviders = new ArrayList<>();
 
 	private final Map<ProviderType<?>, ProviderType<? extends RegistrateLookupFillerProvider>> providerDependencies = new ConcurrentHashMap<>();
 
@@ -18,8 +21,11 @@ public class DataProviderInitializer {
 		addDependency(ProviderType.ITEM_TAGS, ProviderType.BLOCK_TAGS);
 	}
 
-	protected RegistrySetBuilder getDatapackRegistryProviders() {
-		return datapackEntryProvider;
+	/**
+	 * Adds every registered datapack registry bootstrap to the gatherer.
+	 */
+	public void gatherDatapackEntries(DatapackRegistryGatherer gatherer) {
+		datapackEntryProviders.forEach(c -> c.accept(gatherer));
 	}
 
 	protected List<Sorted> getSortedProviders() {
@@ -41,8 +47,14 @@ public class DataProviderInitializer {
 		return ans;
 	}
 
-	public <T> void add(ResourceKey<Registry<T>> registry, RegistrySetBuilder.RegistryBootstrap<T> provider) {
-		datapackEntryProvider.add(registry, provider);
+	public <T> DataProviderInitializer add(ResourceKey<? extends Registry<T>> registry, SingleRegistryBootstrap<T> provider) {
+		datapackEntryProviders.add(g -> g.add(registry, provider));
+		return this;
+	}
+
+	public DataProviderInitializer add(MultiRegistryBootstrap provider) {
+		datapackEntryProviders.add(g -> g.add(provider));
+		return this;
 	}
 
 	public void addDependency(ProviderType<?> dependent, ProviderType<? extends RegistrateLookupFillerProvider> parent) {
